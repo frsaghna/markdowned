@@ -1,0 +1,320 @@
+/* CSS Custom Variables for Themes */
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --text-primary: #2b2b2b;
+  --text-secondary: #6c757d;
+  --accent-color: #0066cc;
+  --border-color: #e9ecef;
+  --quote-bg: #f8f9fa;
+  --quote-border: #cbd5e1;
+  --code-bg: #f1f5f9;
+  --table-header-bg: #f1f5f9;
+  --table-border: #e2e8f0;
+  --selection-bg: #cce4ff;
+  --placeholder-color: #94a3b8;
+  --shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1);
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+}
+
+body.dark-theme {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --accent-color: #38bdf8;
+  --border-color: #334155;
+  --quote-bg: #1e293b;
+  --quote-border: #475569;
+  --code-bg: #1e293b;
+  --table-header-bg: #1e293b;
+  --table-border: #334155;
+  --selection-bg: #0369a1;
+  --placeholder-color: #64748b;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+}
+
+/* Editor Wrapper */
+.editor-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  line-height: 1.625;
+  font-size: 16px;
+  min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ProseMirror Core Editor Styles */
+.ProseMirror {
+  outline: none;
+  min-height: 500px;
+  padding-bottom: 30vh; /* allows scrolling past the end */
+}
+
+/* Headings */
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3,
+.ProseMirror h4,
+.ProseMirror h5,
+.ProseMirror h6 {
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.25;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  letter-spacing: -0.02em;
+}
+
+.ProseMirror h1 { font-size: 2.2em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; }
+.ProseMirror h2 { font-size: 1.65em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.2em; }
+.ProseMirror h3 { font-size: 1.35em; }
+.ProseMirror h4 { font-size: 1.15em; }
+
+.ProseMirror p {
+  margin-top: 0;
+  margin-bottom: 1.2em;
+}
+
+/* Typography elements */
+.ProseMirror strong {
+  font-weight: 700;
+}
+
+.ProseMirror em {
+  font-style: italic;
+}
+
+.ProseMirror s, .ProseMirror del {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+.ProseMirror a {
+  color: var(--accent-color);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--accent-color);
+  transition: border-bottom 0.15s ease;
+}
+
+.ProseMirror a:hover {
+  border-bottom-style: solid;
+}
+
+/* Blockquotes */
+.ProseMirror blockquote {
+  margin: 1.5em 0;
+  padding: 0.5em 1.5em;
+  background-color: var(--quote-bg);
+  border-left: 4px solid var(--quote-border);
+  color: var(--text-secondary);
+  border-radius: 0 6px 6px 0;
+}
+
+.ProseMirror blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* Code Syntax & Pre Blocks */
+.ProseMirror pre {
+  background-color: var(--code-bg);
+  padding: 16px 20px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  line-height: 1.5;
+  margin: 1.5em 0;
+  border: 1px solid var(--border-color);
+  position: relative;
+}
+
+/* Language selector tag */
+.ProseMirror pre::before {
+  content: attr(data-language);
+  position: absolute;
+  top: 6px;
+  right: 12px;
+  font-size: 0.75em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  pointer-events: none;
+}
+
+.ProseMirror code {
+  padding: 0.2em 0.4em;
+  margin: 0;
+  font-size: 85%;
+  background-color: var(--code-bg);
+  color: var(--text-main);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+}
+
+.ProseMirror pre code {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+  color: inherit;
+  display: block;
+}
+
+/* Horizontal Rule */
+.ProseMirror hr {
+  height: 2px;
+  background-color: var(--border-color);
+  border: none;
+  margin: 2.5em 0;
+}
+
+/* Images */
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  display: block;
+  margin: 1.5em auto;
+  border: 1px solid var(--border-color);
+}
+
+/* Lists */
+.ProseMirror ul,
+.ProseMirror ol {
+  margin-top: 0;
+  margin-bottom: 1.2em;
+  padding-left: 2em;
+}
+
+.ProseMirror li {
+  margin-bottom: 0.4em;
+}
+
+/* Checklist / Task list items */
+.ProseMirror li.task-list-item {
+  list-style-type: none;
+  position: relative;
+  padding-left: 28px;
+}
+
+.task-list-checkbox-wrapper {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.task-list-checkbox-wrapper input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-color);
+}
+
+.task-list-item.checked .task-list-content {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+/* Table grid styles */
+.ProseMirror table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  table-layout: fixed;
+}
+
+.ProseMirror th,
+.ProseMirror td {
+  border: 1px solid var(--border-color);
+  padding: 6px 13px;
+  text-align: left;
+  min-width: 1em;
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.ProseMirror th {
+  font-weight: 600;
+  background-color: var(--bg-sidebar);
+}
+
+.ProseMirror tr {
+  border-top: 1px solid var(--border-color);
+}
+
+.ProseMirror tr:nth-child(odd) td {
+  background-color: var(--bg-editor);
+}
+
+.ProseMirror tr:nth-child(even) td {
+  background-color: var(--blockquote-bg);
+}
+
+/* Selected cells inside table */
+.ProseMirror .selectedCell:after {
+  z-index: 2;
+  position: absolute;
+  content: "";
+  left: 0; right: 0; top: 0; bottom: 0;
+  background: rgba(0, 102, 204, 0.08);
+  pointer-events: none;
+}
+
+/* Table column resize handle */
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px; top: 0; bottom: 0;
+  width: 4px;
+  z-index: 20;
+  background-color: #adf;
+  pointer-events: none;
+}
+
+/* Placeholder Styling */
+.ProseMirror .empty-node::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--placeholder-color);
+  pointer-events: none;
+  height: 0;
+  font-style: italic;
+}
+
+/* Focus and selection */
+.ProseMirror ::selection {
+  background-color: var(--selection-bg);
+}
+
+.ProseMirror-selectednode {
+  outline: 2px solid var(--accent-color);
+}
+
+/* Inline markdown syntax markers revealed when cursor is active inside the mark */
+.inline-marker {
+  color: var(--placeholder-color);
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  font-weight: 400;
+  font-style: normal;
+  text-decoration: none;
+  background-color: transparent;
+  opacity: 0.65;
+  padding: 0 1px;
+  user-select: none;
+  pointer-events: none;
+}
