@@ -39,6 +39,39 @@ function createMainWindow() {
     return { action: 'deny' };
   });
 
+  // Handle Super/Win key shortcuts (Super+C, Super+V, Super+X, Super+A, Super+Z, Super+Y)
+  // for custom global scripts on Windows/Linux.
+  if (process.platform !== 'darwin') {
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      if (input.type === 'rawKeyDown' || input.type === 'keyDown') {
+        const isSuper = input.meta;
+        const key = input.key.toLowerCase();
+        
+        if (isSuper) {
+          if (key === 'c') {
+            mainWindow.webContents.copy();
+            event.preventDefault();
+          } else if (key === 'v') {
+            mainWindow.webContents.paste();
+            event.preventDefault();
+          } else if (key === 'x') {
+            mainWindow.webContents.cut();
+            event.preventDefault();
+          } else if (key === 'a') {
+            mainWindow.webContents.selectAll();
+            event.preventDefault();
+          } else if (key === 'z') {
+            mainWindow.webContents.undo();
+            event.preventDefault();
+          } else if (key === 'y') {
+            mainWindow.webContents.redo();
+            event.preventDefault();
+          }
+        }
+      }
+    });
+  }
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -107,7 +140,7 @@ function createApplicationMenu() {
         { role: isMac ? 'close' : 'quit' }
       ]
     },
-    {
+    ...(isMac ? [{
       label: 'Edit',
       submenu: [
         { role: 'undo' },
@@ -120,7 +153,7 @@ function createApplicationMenu() {
         { type: 'separator' },
         { role: 'selectAll' }
       ]
-    },
+    }] : []),
     {
       label: 'Format',
       submenu: [

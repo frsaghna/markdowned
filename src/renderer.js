@@ -14,9 +14,156 @@ function isThemeDark(theme) {
   return ['dark', 'gothic', 'dracula', 'onedark', 'achromatic-dark'].includes(theme);
 }
 
+function showToast(message, type = 'success') {
+  const toast = document.createElement('div');
+  toast.className = `custom-toast toast-${type}`;
+  toast.innerHTML = `<span class="toast-message">${message}</span>`;
+  document.body.appendChild(toast);
+  
+  // Trigger layout to run CSS transitions
+  toast.offsetHeight;
+  toast.classList.add('show');
+  
+  setTimeout(() => {
+    toast.classList.remove('show');
+    toast.addEventListener('transitionend', () => {
+      toast.remove();
+    });
+  }, 2500);
+}
+
+import { Slice } from 'prosemirror-model';
+
+var activeMermaidNodeViews = [];
+
+function isCursorInsideNode(getPos, node, view) {
+  const pos = getPos();
+  if (pos === undefined) return false;
+  const { from, to } = view.state.selection;
+  const nodeFrom = pos;
+  const nodeTo = pos + node.nodeSize;
+  return (from >= nodeFrom && from <= nodeTo) || (to >= nodeFrom && to <= nodeTo);
+}
+
+class MermaidNodeView {
+  constructor(node, view, getPos) {
+    this.node = node;
+    this.view = view;
+    this.getPos = getPos;
+    
+    this.dom = document.createElement('div');
+    this.dom.className = 'prosemirror-mermaid-container';
+    
+    this.editorEl = document.createElement('pre');
+    this.editorEl.className = 'prosemirror-mermaid-editor';
+    
+    this.contentDOM = document.createElement('code');
+    this.contentDOM.className = 'language-mermaid';
+    this.editorEl.appendChild(this.contentDOM);
+    
+    this.renderEl = document.createElement('div');
+    this.renderEl.className = 'prosemirror-mermaid-render';
+    this.renderEl.contentEditable = 'false';
+    
+    this.dom.appendChild(this.editorEl);
+    this.dom.appendChild(this.renderEl);
+    
+    activeMermaidNodeViews.push(this);
+    
+    this.isEditing = true;
+    this.isRendering = false;
+    this.checkSelection();
+
+    // Toggle back to edit mode and place typing cursor inside when clicked
+    this.renderEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      
+      const pos = this.getPos();
+      if (pos === undefined) return;
+      
+      this.isEditing = true;
+      this.editorEl.style.display = 'block';
+      this.renderEl.style.display = 'none';
+      
+      this.view.focus();
+      
+      const { state, dispatch } = this.view;
+      const tr = state.tr.setSelection(TextSelection.create(state.doc, pos + 1));
+      dispatch(tr);
+    });
+  }
+  
+  checkSelection() {
+    const isFocused = this.view.hasFocus();
+    const editing = isFocused && isCursorInsideNode(this.getPos, this.node, this.view);
+    
+    if (editing !== this.isEditing) {
+      this.isEditing = editing;
+      if (editing) {
+        this.editorEl.style.display = 'block';
+        this.renderEl.style.display = 'none';
+      } else {
+        this.editorEl.style.display = 'none';
+        this.renderEl.style.display = 'block';
+        this.renderDiagram();
+      }
+    } else if (!editing && this.renderEl.innerHTML === '' && !this.isRendering) {
+      this.renderDiagram();
+    }
+  }
+  
+  async renderDiagram() {
+    if (this.isRendering) return;
+    this.isRendering = true;
+    
+    const text = this.node.textContent.trim();
+    if (!text) {
+      this.renderEl.innerHTML = '<div class="mermaid-placeholder">Empty Mermaid Diagram</div>';
+      this.isRendering = false;
+      return;
+    }
+    
+    const uniqueId = `mermaid-live-${Math.random().toString(36).substr(2, 9)}`;
+    try {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: isThemeDark(currentTheme) ? 'dark' : 'default',
+      });
+      const { svg } = await mermaid.render(uniqueId, text);
+      this.renderEl.innerHTML = svg;
+    } catch (err) {
+      console.error("Mermaid live render error:", err);
+      this.renderEl.innerHTML = `<div class="mermaid-error">⚠️ Mermaid Syntax Error</div>`;
+      const badSvg = document.getElementById(uniqueId);
+      if (badSvg) badSvg.remove();
+    } finally {
+      this.isRendering = false;
+    }
+  }
+  
+  update(node) {
+    if (node.type !== this.node.type) return false;
+    const textChanged = node.textContent !== this.node.textContent;
+    this.node = node;
+    
+    if (!this.isEditing && textChanged) {
+      this.renderDiagram();
+    }
+    return true;
+  }
+  
+  ignoreMutation(mutation) {
+    return true;
+  }
+  
+  destroy() {
+    activeMermaidNodeViews = activeMermaidNodeViews.filter(nv => nv !== this);
+  }
+}
 
 // ProseMirror Imports for WYSIWYG Live Mode
-import { EditorState as PMEditorState } from 'prosemirror-state';
+import { EditorState as PMEditorState, TextSelection } from 'prosemirror-state';
 import { EditorView as PMEditorView } from 'prosemirror-view';
 import { keymap as pmKeymap } from 'prosemirror-keymap';
 import { tableEditing, columnResizing } from 'prosemirror-tables';
@@ -748,17 +895,52 @@ var cmAutoClose = EditorView.domEventHandlers({
 });
 var cmPasteHandler = EditorView.domEventHandlers({
   paste: (event, view) => {
+    const files = event.clipboardData?.files;
+    if (files && files.length > 0) {
+      for (const file of Array.from(files)) {
+        if (file.type.startsWith('image/')) {
+          event.preventDefault();
+          showToast("Pasting image...", "success");
+          
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const arrayBuffer = reader.result;
+            const ext = file.name ? file.name.split('.').pop() : 'png';
+            const fileName = `img_${Date.now()}.${ext}`;
+            try {
+              const localUrl = await window.electronAPI.saveAsset(fileName, arrayBuffer);
+              const markdownImage = `![${file.name || 'image'}](${localUrl})\n`;
+              const { from, to } = view.state.selection.main;
+              view.dispatch({
+                changes: { from, to, insert: markdownImage },
+                selection: { anchor: from + markdownImage.length }
+              });
+              showToast("Image pasted successfully!", "success");
+            } catch (err) {
+              console.error('Failed to save pasted asset:', err);
+              showToast("Failed to paste image", "error");
+            }
+          };
+          reader.readAsArrayBuffer(file);
+        }
+      }
+      return true;
+    }
+
     const html2 = event.clipboardData.getData("text/html");
+    const plainText = event.clipboardData.getData("text/plain");
     if (html2) {
-      event.preventDefault();
       const turndownService = new TurndownService();
       const markdownText = turndownService.turndown(html2);
-      const { from, to } = view.state.selection.main;
-      view.dispatch({
-        changes: { from, to, insert: markdownText },
-        selection: { anchor: from + markdownText.length }
-      });
-      return true;
+      if (markdownText && markdownText.trim() !== plainText.trim()) {
+        event.preventDefault();
+        const { from, to } = view.state.selection.main;
+        view.dispatch({
+          changes: { from, to, insert: markdownText },
+          selection: { anchor: from + markdownText.length }
+        });
+        return true;
+      }
     }
     return false;
   }
@@ -856,6 +1038,14 @@ function createLiveEditor(initialContent) {
 
   pmView = new PMEditorView(mountPoint, {
     state,
+    nodeViews: {
+      code_block(node, view, getPos) {
+        if (node.attrs.params === 'mermaid') {
+          return new MermaidNodeView(node, view, getPos);
+        }
+        return null;
+      }
+    },
     dispatchTransaction(transaction) {
       try {
         const newState = pmView.state.apply(transaction);
@@ -868,6 +1058,9 @@ function createLiveEditor(initialContent) {
         if ((transaction.docChanged || transaction.selectionSet) && isTypewriterMode) {
           centerActiveLine();
         }
+
+        // Check if selection moved inside/outside of Mermaid blocks
+        activeMermaidNodeViews.forEach(nv => nv.checkSelection());
       } catch (err) {
         logDebug("Error in dispatchTransaction: " + err.stack);
       }
@@ -1301,6 +1494,56 @@ function updatePreview() {
         console.error("Error rendering Mermaid diagram:", err);
       }
     }
+
+    // Add Copy buttons to code blocks
+    const preBlocks = preview.querySelectorAll('pre');
+    preBlocks.forEach((pre) => {
+      if (pre.classList.contains('mermaid') || pre.querySelector('.code-copy-btn')) {
+        return;
+      }
+      
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'code-copy-btn';
+      copyBtn.title = 'Copy code';
+      copyBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+      `;
+      
+      pre.style.position = 'relative';
+      
+      copyBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const codeElement = pre.querySelector('code');
+        const textToCopy = codeElement ? codeElement.innerText : pre.innerText;
+        
+        try {
+          await navigator.clipboard.writeText(textToCopy);
+          copyBtn.classList.add('copied');
+          copyBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: #4caf50;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          `;
+          
+          setTimeout(() => {
+            copyBtn.classList.remove('copied');
+            copyBtn.innerHTML = `
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            `;
+          }, 1500);
+        } catch (err) {
+          console.error("Failed to copy code block:", err);
+        }
+      });
+      
+      pre.appendChild(copyBtn);
+    });
   }, 50);
 }
 function bindTaskCheckboxes() {
@@ -1659,13 +1902,59 @@ function buildOutline() {
       el.href = "#";
       el.addEventListener("click", (e) => {
         e.preventDefault();
-        cmView.focus();
-        cmView.dispatch({
-          selection: { anchor: heading2.charIndex }
-        });
-        const lineHeight = 27;
-        editorScrollContainer.scrollTop = heading2.lineIndex * lineHeight - 60;
-        if (isTypewriterMode) centerActiveLine();
+        
+        const headingIndex = headings.indexOf(heading2);
+        
+        if (currentMode === "write" || currentMode === "split") {
+          if (cmView) {
+            cmView.focus();
+            cmView.dispatch({
+              selection: { anchor: heading2.charIndex },
+              scrollIntoView: true
+            });
+            if (isTypewriterMode) {
+              setTimeout(centerActiveLine, 100);
+            }
+          }
+        } else if (currentMode === "live") {
+          if (pmView) {
+            pmView.focus();
+            let currentHeadingCount = 0;
+            let foundPos = -1;
+            pmView.state.doc.descendants((node, pos) => {
+              if (node.type.name === 'heading') {
+                if (currentHeadingCount === headingIndex) {
+                  foundPos = pos;
+                  return false;
+                }
+                currentHeadingCount++;
+              }
+            });
+            
+            if (foundPos !== -1) {
+              const tr = pmView.state.tr.setSelection(TextSelection.create(pmView.state.doc, foundPos + 1));
+              tr.scrollIntoView();
+              pmView.dispatch(tr);
+              if (isTypewriterMode) {
+                setTimeout(centerActiveLine, 100);
+              }
+            }
+          }
+        } else if (currentMode === "preview") {
+          if (previewScrollContainer) {
+            const previewHeadings = preview.querySelectorAll('h1, h2, h3, h4, h5, h6');
+            if (previewHeadings.length > headingIndex) {
+              const targetHeadingEl = previewHeadings[headingIndex];
+              const rect = targetHeadingEl.getBoundingClientRect();
+              const containerRect = previewScrollContainer.getBoundingClientRect();
+              const relativeTop = rect.top - containerRect.top + previewScrollContainer.scrollTop;
+              previewScrollContainer.scrollTo({
+                top: relativeTop - 20,
+                behavior: 'smooth'
+              });
+            }
+          }
+        }
       });
       outlineTree.appendChild(el);
     });
@@ -1757,6 +2046,18 @@ function setTheme(theme2) {
   currentTheme = theme2;
   localStorage.setItem("theme", theme2);
   updateThemeUI();
+  
+  // Re-render active live diagrams to match the new theme
+  activeMermaidNodeViews.forEach(nv => {
+    if (!nv.isEditing) {
+      nv.renderDiagram();
+    }
+  });
+
+  // Force ProseMirror to update its decorators for the new theme
+  if (typeof pmView !== 'undefined' && pmView) {
+    pmView.dispatch(pmView.state.tr);
+  }
 }
 function updateThemeUI() {
   document.body.classList.remove(
@@ -2197,6 +2498,28 @@ ${result.filePath}`);
     alert(`Error exporting PDF: ${result.error}`);
   }
 }
+async function copyMarkdownToClipboard() {
+  const content = getEditorContent();
+  try {
+    await navigator.clipboard.writeText(content);
+    showToast("Markdown copied to clipboard!", "success");
+  } catch (err) {
+    console.error("Failed to copy markdown:", err);
+    showToast("Failed to copy to clipboard", "error");
+  }
+}
+async function copyHTMLToClipboard() {
+  const rawMarkdown = getEditorContent();
+  try {
+    const htmlContent = await window.electronAPI.parseMarkdown(rawMarkdown);
+    await navigator.clipboard.writeText(htmlContent);
+    showToast("HTML copied to clipboard!", "success");
+  } catch (err) {
+    console.error("Failed to copy HTML:", err);
+    showToast("Failed to copy HTML to clipboard", "error");
+  }
+}
+
 init();
 
 // Custom Menu and Command Palette Implementation
@@ -2226,7 +2549,10 @@ const menuData = [
       { label: 'Copy', accelerator: 'Ctrl+C', action: 'copy' },
       { label: 'Paste', accelerator: 'Ctrl+V', action: 'paste' },
       { type: 'separator' },
-      { label: 'Select All', accelerator: 'Ctrl+A', action: 'select-all' }
+      { label: 'Select All', accelerator: 'Ctrl+A', action: 'select-all' },
+      { type: 'separator' },
+      { label: 'Copy as Markdown', action: 'copy-markdown' },
+      { label: 'Copy as HTML', action: 'copy-html' }
     ]
   },
   {
@@ -2297,6 +2623,8 @@ const commandPaletteData = [
   { name: 'Edit: Copy Selection', action: 'copy', kbd: 'Ctrl+C', category: 'Edit' },
   { name: 'Edit: Paste Clipboard', action: 'paste', kbd: 'Ctrl+V', category: 'Edit' },
   { name: 'Edit: Select All Text', action: 'select-all', kbd: 'Ctrl+A', category: 'Edit' },
+  { name: 'Edit: Copy Entire Document as Markdown', action: 'copy-markdown', category: 'Edit' },
+  { name: 'Edit: Copy Entire Document as HTML', action: 'copy-html', category: 'Edit' },
   
   { name: 'Format: Toggle Bold Text', action: 'format-bold', kbd: 'Ctrl+B', category: 'Format' },
   { name: 'Format: Toggle Italic Text', action: 'format-italic', kbd: 'Ctrl+I', category: 'Format' },
@@ -2591,6 +2919,12 @@ function handleMenuAction(action, value) {
     case 'select-all':
       executeEditAction(action);
       break;
+    case 'copy-markdown':
+      copyMarkdownToClipboard();
+      break;
+    case 'copy-html':
+      copyHTMLToClipboard();
+      break;
     case 'format-bold':
       formatMarkdown('bold');
       break;
@@ -2671,3 +3005,5 @@ function executeEditAction(action) {
     document.execCommand('selectAll');
   }
 }
+
+

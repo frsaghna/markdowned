@@ -1,5 +1,6 @@
 import { Selection, Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet, EditorView } from 'prosemirror-view';
+import { Slice } from 'prosemirror-model';
 import { history } from 'prosemirror-history';
 import { dropCursor } from 'prosemirror-dropcursor';
 import { gapCursor } from 'prosemirror-gapcursor';
@@ -70,11 +71,15 @@ export const clipboardPlugin = new Plugin({
           // Parse pasted text as Markdown
           const parsedDoc = parseMarkdown(text);
           const fragment = parsedDoc.content;
-          const newTr = state.tr.replaceSelection({
-            content: fragment,
-            openStart: 0,
-            openEnd: 0,
-          } as any);
+          
+          let openStart = 0;
+          let openEnd = 0;
+          if (parsedDoc.childCount === 1 && parsedDoc.firstChild?.type === schema.nodes.paragraph) {
+            openStart = 1;
+            openEnd = 1;
+          }
+          
+          const newTr = state.tr.replaceSelection(new Slice(fragment, openStart, openEnd));
           dispatch(newTr.scrollIntoView());
           return true;
         } catch (err) {
@@ -162,14 +167,24 @@ export function createHighlightPlugin() {
   let decorations = DecorationSet.empty;
   let isHighlighting = false;
   let cachedDocText = '';
+  let lastTheme = '';
 
   const runHighlight = async (view: EditorView) => {
     if (isHighlighting) return;
     const doc = view.state.doc;
     const docText = doc.textContent;
-    if (docText === cachedDocText && decorations !== DecorationSet.empty) return;
+    
+    const isDark = Array.from(document.body.classList).some(cls => 
+      ['theme-dark', 'theme-gothic', 'theme-dracula', 'theme-onedark', 'theme-achromatic-dark'].includes(cls)
+    );
+    const theme = isDark ? 'github-dark' : 'github-light';
+    
+    if (docText === cachedDocText && theme === lastTheme && decorations !== DecorationSet.empty) return;
 
     isHighlighting = true;
+    cachedDocText = docText;
+    lastTheme = theme;
+    
     try {
       const highlighter = await getShiki();
       const decos: Decoration[] = [];
@@ -178,10 +193,6 @@ export function createHighlightPlugin() {
         if (node.type === schema.nodes.code_block) {
           const lang = node.attrs.params || 'javascript';
           const codeText = node.textContent;
-          
-          // Check if theme is dark
-          const isDark = document.documentElement.classList.contains('dark') || document.body.classList.contains('dark-theme');
-          const theme = isDark ? 'github-dark' : 'github-light';
 
           try {
             // Lazy load languages if missing
